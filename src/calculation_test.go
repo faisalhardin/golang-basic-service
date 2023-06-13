@@ -71,7 +71,7 @@ func Test_InsertNewRecord(t *testing.T) {
 				ClosePrice:    8100,
 				Volume:        900,
 				Value:         7210000,
-				IsNewDay:      false,
+				IsNewDay:      0,
 			},
 			wantErr: false,
 		},

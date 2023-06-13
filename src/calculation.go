@@ -18,7 +18,7 @@ var (
 type OHLC struct {
 	transactionLog map[string][]entity.MstTransaction
 	summaryLog     map[string]entity.Summary
-	Store          *repo.RedisOptions
+	Store          *repo.Storage
 }
 
 func NewOHLCRecords(records *OHLC) *OHLC {
@@ -40,23 +40,19 @@ func (rec OHLC) GetRedisSummaryLog(stockCode string) (summary entity.Summary, er
 	summary, err = rec.Store.HGetSummary(fmt.Sprintf(StoreSummaryStockAsKeyFormat, stockCode))
 	if err != nil && !errors.Is(err, redis.ErrNil) {
 		err = errors.Wrap(err, "GetSummaryLog")
-		return summary, err
-	}
-	if errors.Is(err, redis.ErrNil) {
-		err = nil
 	}
 
-	return summary, nil
+	return summary, err
 }
 
 func (rec OHLC) SetRedisSummaryLog(stockCode string, summary entity.Summary) (err error) {
-	_, err = rec.Store.Del(stockCode)
+	_, err = rec.Store.Del(fmt.Sprintf(StoreSummaryStockAsKeyFormat, stockCode))
 	if err != nil {
 		err = errors.Wrap(err, "GetSummaryLog")
 		return err
 	}
 
-	_, err = rec.Store.HSetSummary(stockCode, summary)
+	_, err = rec.Store.HSetSummary(fmt.Sprintf(StoreSummaryStockAsKeyFormat, stockCode), summary)
 	if err != nil {
 		err = errors.Wrap(err, "GetSummaryLog")
 		return err
@@ -76,22 +72,21 @@ func (rec OHLC) SetSummaryLog(stockCode string, summary entity.Summary) entity.S
 func (rec OHLC) InsertNewRecord(trx entity.Transaction) (err error) {
 	quantity, err := strconv.ParseInt(trx.Quantity, 10, 64)
 	if err != nil {
-		err = errors.Wrap(err, "InsertNewRecord")
+		err = errors.Wrap(err, "InsertNewRecord. Quantity"+trx.Quantity)
 		return
 	}
 
 	price, err := strconv.ParseInt(trx.Price, 10, 64)
 	if err != nil {
-		err = errors.Wrap(err, "InsertNewRecord")
+		err = errors.Wrap(err, "InsertNewRecord. Price ="+trx.Price)
 		return
 	}
 
 	newEntry := entity.MstTransaction{
-		Type:      trx.Type,
-		Stock:     trx.Stock,
-		OrderBook: trx.OrderBook,
-		Quantity:  quantity,
-		Price:     price,
+		Type:     trx.Type,
+		Stock:    trx.Stock,
+		Quantity: quantity,
+		Price:    price,
 	}
 
 	if _, found := rec.transactionLog[trx.Stock]; !found {
@@ -117,9 +112,13 @@ func (rec OHLC) CalculateRecordsByStockCode(trx entity.MstTransaction) (err erro
 	}
 
 	summary, err = rec.GetRedisSummaryLog(trx.Stock)
-	if err != nil {
+	if err != nil && !errors.Is(err, redis.ErrNil) {
 		err = errors.Wrap(err, "CalculateRecordsByStockCode")
 		return err
+	}
+	if errors.Is(err, redis.ErrNil) {
+		summary.LowestPrice = math.MaxInt64
+		err = nil
 	}
 
 	if trx.Type == "E" || trx.Type == "P" {
@@ -132,16 +131,16 @@ func (rec OHLC) CalculateRecordsByStockCode(trx entity.MstTransaction) (err erro
 			summary.LowestPrice = trx.Price
 		}
 
-		if summary.IsNewDay {
+		if summary.IsNewDay > 0 {
 			summary.OpenPrice = trx.Price
-			summary.IsNewDay = false
+			summary.IsNewDay = 0
 		}
 
 		summary.ClosePrice = trx.Price
 	}
 	if trx.Quantity == 0 {
 		summary.PreviousPrice = trx.Price
-		summary.IsNewDay = true
+		summary.IsNewDay = 1
 	}
 
 	rec.summaryLog[trx.Stock] = summary

@@ -242,7 +242,7 @@ func Test_HSetSummary(t *testing.T) {
 		ClosePrice:    8100,
 		Volume:        900,
 		Value:         7210000,
-		IsNewDay:      false,
+		IsNewDay:      0,
 	}
 	type args struct {
 		Address string
@@ -287,7 +287,7 @@ func Test_HGetSummary(t *testing.T) {
 		ClosePrice:    8100,
 		Volume:        900,
 		Value:         7210000,
-		IsNewDay:      false,
+		IsNewDay:      0,
 	}
 	type args struct {
 		Address string

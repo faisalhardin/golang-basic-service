@@ -10,19 +10,17 @@ var (
 )
 
 type Transaction struct {
-	Type      string `json:"type"`
-	Stock     string `json:"stock_code"`
-	Quantity  string `json:"quantity"`
-	Price     string `json:"price"`
-	OrderBook string `json:"order_book"`
+	Type     string `json:"type"`
+	Stock    string `json:"stock_code"`
+	Quantity string `json:"order_book"`
+	Price    string `json:"price"`
 }
 
 type MstTransaction struct {
-	Type      string `json:"type"`
-	Stock     string `json:"stock_code"`
-	Quantity  int64  `json:"quantity"`
-	Price     int64  `json:"price"`
-	OrderBook string `json:"order_book"`
+	Type     string `json:"type"`
+	Stock    string `json:"stock_code"`
+	Quantity int64  `json:"quantity"`
+	Price    int64  `json:"price"`
 }
 
 type Summary struct {
@@ -33,7 +31,7 @@ type Summary struct {
 	ClosePrice    int64 `json:"close_price"`
 	Volume        int64 `json:"volume"`
 	Value         int64 `json:"value"`
-	IsNewDay      bool
+	IsNewDay      int64 `json:"is_new_day"`
 }
 
 func (s *Summary) ConvertFromHGetAllToStruct(redisResponse []string) (err error) {
@@ -63,6 +61,8 @@ func (s *Summary) ConvertFromHGetAllToStruct(redisResponse []string) (err error)
 			s.Volume = value
 		case "value":
 			s.Value = value
+		case "is_new_day":
+			s.IsNewDay = value
 		}
 	}
 
