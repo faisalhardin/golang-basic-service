@@ -1,6 +1,7 @@
 package src
 
 import (
+	"math"
 	"strconv"
 	"task1/entity"
 )
@@ -12,8 +13,10 @@ type OHLC struct {
 
 func NewOHLCRecords(records *OHLC) *OHLC {
 	newLogs := make(map[string][]entity.MstTransaction)
+	newSummary := make(map[string]entity.Summary)
 	return &OHLC{
 		transactionLog: newLogs,
+		summaryLog:     newSummary,
 	}
 }
 
@@ -60,39 +63,43 @@ func (rec OHLC) InsertNewRecord(trx entity.Transaction) (err error) {
 }
 
 func (rec OHLC) CalculateRecordsByStockCode(trx entity.MstTransaction) {
-	if summary, found := rec.summaryLog[trx.Stock]; !found {
-
-		// switch {
-		// case trx.Quantity == 0:
-		// 	summary.PreviousPrice = trx.Price
-		// 	summary.IsNewDay = true
-		// case trx.Type == "E" || trx.Type == "P":
-		// 	summary.Volume += trx.Quantity
-		// 	summary.Value += trx.Quantity * trx.Price
-
-		// }
-
-		if trx.Type == "E" || trx.Type == "P" {
-			summary.Volume += trx.Quantity
-			summary.Value += trx.Quantity * trx.Price
-			if summary.HighestPrice < trx.Price {
-				summary.HighestPrice = trx.Price
-			}
-			if summary.LowestPrice > trx.Price {
-				summary.LowestPrice = trx.Price
-			}
-
-			if summary.IsNewDay {
-				summary.OpenPrice = trx.Price
-			}
-		}
-		if trx.Quantity == 0 {
-			summary.PreviousPrice = trx.Price
-			summary.IsNewDay = true
-		}
-
-		rec.summaryLog[trx.Stock] = summary
-
+	summary, found := rec.summaryLog[trx.Stock]
+	if !found {
+		summary.LowestPrice = math.MaxInt64
 	}
+
+	// switch {
+	// case trx.Quantity == 0:
+	// 	summary.PreviousPrice = trx.Price
+	// 	summary.IsNewDay = true
+	// case trx.Type == "E" || trx.Type == "P":
+	// 	summary.Volume += trx.Quantity
+	// 	summary.Value += trx.Quantity * trx.Price
+
+	// }
+
+	if trx.Type == "E" || trx.Type == "P" {
+		summary.Volume += trx.Quantity
+		summary.Value += trx.Quantity * trx.Price
+		if summary.HighestPrice < trx.Price {
+			summary.HighestPrice = trx.Price
+		}
+		if summary.LowestPrice > trx.Price {
+			summary.LowestPrice = trx.Price
+		}
+
+		if summary.IsNewDay {
+			summary.OpenPrice = trx.Price
+			summary.IsNewDay = false
+		}
+
+		summary.ClosePrice = trx.Price
+	}
+	if trx.Quantity == 0 {
+		summary.PreviousPrice = trx.Price
+		summary.IsNewDay = true
+	}
+
+	rec.summaryLog[trx.Stock] = summary
 
 }
