@@ -3,6 +3,7 @@ package src
 import (
 	"reflect"
 	"task1/entity"
+	"task1/src/repo"
 	"testing"
 )
 
@@ -77,7 +78,12 @@ func Test_InsertNewRecord(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rec := NewOHLCRecords(&OHLC{})
+			redisRepo := repo.NewRedisRepo(&repo.RedisOptions{
+				Address: "127.0.0.1:6379",
+			})
+			rec := NewOHLCRecords(&OHLC{
+				Store: redisRepo,
+			})
 
 			for _, record := range tt.args.records {
 				err := rec.InsertNewRecord(record)
