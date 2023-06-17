@@ -5,6 +5,7 @@ go 1.20
 require github.com/pkg/errors v0.9.1
 
 require (
+	github.com/confluentinc/confluent-kafka-go v1.9.2
 	github.com/confluentinc/confluent-kafka-go/v2 v2.1.1 // indirect
 	github.com/gomodule/redigo v1.8.9 // indirect
 	github.com/klauspost/compress v1.15.9 // indirect
