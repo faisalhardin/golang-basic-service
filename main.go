@@ -8,7 +8,7 @@ import (
 	"task1/src/repo"
 )
 
-func main() {
+func main2() {
 
 	redisRepo := repo.NewRedisRepo(&repo.RedisOptions{
 		Address: "127.0.0.1:6379",
