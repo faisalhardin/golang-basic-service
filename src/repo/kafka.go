@@ -16,7 +16,7 @@ type KafkaOption struct {
 	Topic           string
 	ConsumerGroupID string
 
-	kafkaProducer  *kafka.Producer
+	kafkaProducer  entity.KafkaInterface
 	topicPartition kafka.TopicPartition
 }
 
