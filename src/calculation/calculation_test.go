@@ -1,101 +1,90 @@
 package calculation
 
 import (
-	"reflect"
 	"task1/entity"
-	"task1/src/repo"
 	"testing"
+
+	mockrepo "task1/mock/repo"
+
+	"github.com/golang/mock/gomock"
 )
 
 var (
-	mockTransaction = []entity.Transaction{
-		{
-			Type:     "A",
-			Stock:    "BBCA",
-			Quantity: "0",
-			Price:    "8000",
-		},
-		{
-			Type:     "P",
-			Stock:    "BBCA",
-			Quantity: "100",
-			Price:    "8050",
-		},
-		{
-			Type:     "P",
-			Stock:    "BBCA",
-			Quantity: "500",
-			Price:    "7950",
-		},
-		{
-			Type:     "A",
-			Stock:    "BBCA",
-			Quantity: "200",
-			Price:    "8150",
-		},
-		{
-			Type:     "E",
-			Stock:    "BBCA",
-			Quantity: "300",
-			Price:    "8100",
-		},
-		{
-			Type:     "A",
-			Stock:    "BBCA",
-			Quantity: "100",
-			Price:    "8200",
-		},
+	mockInsertTransaction = entity.Transaction{
+		Type:             "P",
+		Stock:            "BBCA",
+		ExecutedQuantity: "100",
+		ExecutedPrice:    "8050",
+	}
+	mockGetSummary = entity.Summary{
+		PreviousPrice: 8000,
+		HighestPrice:  8000,
+		LowestPrice:   7000,
+		Volume:        100,
+		Value:         750000,
+	}
+	mockWantedSummary = entity.Summary{
+		PreviousPrice: 8000,
+		HighestPrice:  8050,
+		LowestPrice:   7000,
+		Volume:        200,
+		Value:         1555000,
 	}
 )
 
+var (
+	mockRedisHandler *mockrepo.MockHandler
+	mockStorage      *mockrepo.MockStorageInterface
+)
+
+func initMocks(t *testing.T) *gomock.Controller {
+	ctrl := gomock.NewController(t)
+	mockRedisHandler = mockrepo.NewMockHandler(ctrl)
+	mockStorage = mockrepo.NewMockStorageInterface(ctrl)
+
+	return ctrl
+}
+
 func Test_InsertNewRecord(t *testing.T) {
+	ctrl := initMocks(t)
+	defer ctrl.Finish()
+
 	type args struct {
-		records []entity.Transaction
+		records entity.Transaction
 	}
 	tests := []struct {
 		name        string
 		args        args
 		wantErr     bool
 		wantSummary entity.Summary
+		patch       func()
 	}{
 		{
 			name: "Successful and Correct InsertNewRecord",
 			args: args{
-				records: mockTransaction,
+				records: mockInsertTransaction,
 			},
-			wantSummary: entity.Summary{
-				PreviousPrice: 8000,
-				OpenPrice:     8050,
-				HighestPrice:  8100,
-				LowestPrice:   7950,
-				ClosePrice:    8100,
-				Volume:        900,
-				Value:         7210000,
-				IsNewDay:      0,
+			wantSummary: mockWantedSummary,
+			wantErr:     false,
+			patch: func() {
+				mockStorage.EXPECT().HGetSummary(gomock.Any()).
+					Return(mockGetSummary, nil).Times(1)
+				mockStorage.EXPECT().Del(gomock.Any()).Return(int64(1), nil).Times(1)
+				mockStorage.EXPECT().HSetSummary(gomock.Any(), gomock.Any()).
+					Return(int64(1), nil).Times(1)
 			},
-			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			redisRepo := repo.NewRedisRepo(&repo.RedisOptions{
-				Address: "127.0.0.1:6379",
-			})
-			rec := NewOHLCRecords(&OHLC{
-				Store: redisRepo,
-			})
-
-			for _, record := range tt.args.records {
-				err := rec.InsertNewRecord(record)
-				if (err != nil) != tt.wantErr {
-					t.Errorf("InsertNewRecord() err = %v, wantErr = %v", err, tt.wantErr)
-				}
+			rec := &OHLC{
+				Store: mockStorage,
 			}
-			got := rec.GetSummaryLog("BBCA")
-			if !reflect.DeepEqual(tt.wantSummary, got) {
-				t.Errorf("rec.GetSummaryLog() = %v, want %v", got, tt.wantSummary)
+			tt.patch()
+			err := rec.InsertNewRecord(mockInsertTransaction)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("InsertNewRecord() err = %v, wantErr = %v", err, tt.wantErr)
 			}
-
 		})
 	}
 }

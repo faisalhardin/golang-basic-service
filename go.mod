@@ -5,6 +5,12 @@ go 1.20
 require github.com/pkg/errors v0.9.1
 
 require (
+	github.com/golang/mock v1.6.0 // indirect
+	golang.org/x/mod v0.8.0 // indirect
+	golang.org/x/tools v0.6.0 // indirect
+)
+
+require (
 	github.com/confluentinc/confluent-kafka-go v1.9.2
 	github.com/confluentinc/confluent-kafka-go/v2 v2.1.1 // indirect
 	github.com/gomodule/redigo v1.8.9 // indirect

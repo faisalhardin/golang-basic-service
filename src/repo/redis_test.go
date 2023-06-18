@@ -1,75 +1,20 @@
 package repo
 
 import (
-	"context"
 	"reflect"
 	"task1/entity"
 	"testing"
 
+	mockentityrepo "task1/entity/mock"
+
 	"github.com/gomodule/redigo/redis"
 )
 
-var GetFunc func() redis.Conn
-var GetContextFunc func(context.Context) (redis.Conn, error)
-
-var GetCloseFunc func() error
-var GetErrFunc func() error
-var GetDoFunc func(commandName string, args ...interface{}) (reply interface{}, err error)
-var GetSendFunc func(commandName string, args ...interface{}) error
-var GetFlushFunc func() error
-var GetReceiveFunc func() (reply interface{}, err error)
-
-type MochHandler struct {
-	GetFunc        func() redis.Conn
-	GetContextFunc func(context.Context) (redis.Conn, error)
-}
-
-func (h *MochHandler) Get() redis.Conn {
-	return GetFunc()
-}
-
-func (h *MochHandler) GetContext(ctx context.Context) (redis.Conn, error) {
-	return GetContextFunc(ctx)
-}
-
-type MockRedisConn struct {
-	GetCloseFunc   func() error
-	GetErrFunc     func() error
-	GetDoFunc      func(commandName string, args ...interface{}) (reply interface{}, err error)
-	GetSendFunc    func(commandName string, args ...interface{}) error
-	GetFlushFunc   func() error
-	GetReceiveFunc func() (reply interface{}, err error)
-}
-
-func (rc *MockRedisConn) Close() error {
-	return GetCloseFunc()
-}
-
-func (rc *MockRedisConn) Err() error {
-	return GetErrFunc()
-}
-
-func (rc *MockRedisConn) Do(c string, args ...interface{}) (reply interface{}, err error) {
-	return GetDoFunc(c, args)
-}
-
-func (rc *MockRedisConn) Send(c string, args ...interface{}) error {
-	return GetSendFunc(c, args...)
-}
-
-func (rc *MockRedisConn) Flush() error {
-	return GetFlushFunc()
-}
-
-func (rc *MockRedisConn) Receive() (reply interface{}, err error) {
-	return GetReceiveFunc()
-}
-
 func Test_Ping(t *testing.T) {
 
-	mockRedisConn := MockRedisConn{}
+	mockRedisConn := mockentityrepo.MockRedisConn{}
 
-	mockRedisHandler := MochHandler{}
+	mockRedisHandler := mockentityrepo.MochHandler{}
 
 	type args struct {
 		Address string
@@ -86,11 +31,11 @@ func Test_Ping(t *testing.T) {
 				Address: "",
 			},
 			patch: func() {
-				GetDoFunc = func(commandName string, args ...interface{}) (reply interface{}, err error) {
+				mockentityrepo.GetDoFunc = func(commandName string, args ...interface{}) (reply interface{}, err error) {
 					return nil, nil
 				}
 
-				GetFunc = func() redis.Conn {
+				mockentityrepo.GetFunc = func() redis.Conn {
 					return &mockRedisConn
 				}
 
@@ -114,9 +59,9 @@ func Test_Ping(t *testing.T) {
 }
 
 func Test_HSetSummary(t *testing.T) {
-	mockRedisConn := MockRedisConn{}
+	mockRedisConn := mockentityrepo.MockRedisConn{}
 
-	mockRedisHandler := MochHandler{}
+	mockRedisHandler := mockentityrepo.MochHandler{}
 
 	mockSummary := entity.Summary{
 		PreviousPrice: 8000,
@@ -153,15 +98,15 @@ func Test_HSetSummary(t *testing.T) {
 				return int64(numOfFields)
 			}(),
 			patch: func() {
-				GetDoFunc = func(commandName string, args ...interface{}) (reply interface{}, err error) {
+				mockentityrepo.GetDoFunc = func(commandName string, args ...interface{}) (reply interface{}, err error) {
 					return int64(8), nil
 				}
 
-				GetCloseFunc = func() error {
+				mockentityrepo.GetCloseFunc = func() error {
 					return nil
 				}
 
-				GetFunc = func() redis.Conn {
+				mockentityrepo.GetFunc = func() redis.Conn {
 					return &mockRedisConn
 				}
 			},
@@ -185,9 +130,9 @@ func Test_HSetSummary(t *testing.T) {
 }
 
 func Test_HGetSummary(t *testing.T) {
-	mockRedisConn := MockRedisConn{}
+	mockRedisConn := mockentityrepo.MockRedisConn{}
 
-	mockRedisHandler := MochHandler{}
+	mockRedisHandler := mockentityrepo.MochHandler{}
 
 	wantSummary := entity.Summary{
 		PreviousPrice: 8000,
@@ -219,15 +164,15 @@ func Test_HGetSummary(t *testing.T) {
 			want:    wantSummary,
 			wantErr: false,
 			patch: func() {
-				GetDoFunc = func(commandName string, args ...interface{}) (reply interface{}, err error) {
+				mockentityrepo.GetDoFunc = func(commandName string, args ...interface{}) (reply interface{}, err error) {
 					return nil, nil
 				}
 
-				GetCloseFunc = func() error {
+				mockentityrepo.GetCloseFunc = func() error {
 					return nil
 				}
 
-				GetFunc = func() redis.Conn {
+				mockentityrepo.GetFunc = func() redis.Conn {
 					return &mockRedisConn
 				}
 

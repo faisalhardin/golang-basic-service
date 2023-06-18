@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"task1/entity"
 	"task1/src/filereader"
-	"task1/src/repo"
 
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	"github.com/gomodule/redigo/redis"
@@ -20,7 +19,7 @@ var (
 type OHLC struct {
 	transactionLog map[string][]entity.MstTransaction
 	summaryLog     map[string]entity.Summary
-	Store          *repo.Storage
+	Store          entity.StorageInterface
 }
 
 func NewOHLCRecords(records *OHLC) *OHLC {

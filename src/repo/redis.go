@@ -1,7 +1,6 @@
 package repo
 
 import (
-	"context"
 	"log"
 	"sync"
 	"task1/entity"
@@ -17,7 +16,6 @@ var (
 )
 
 type RedisOptions struct {
-	conn          redis.Conn
 	Address       string
 	MaxActiveConn int
 	MaxIdleConn   int
@@ -25,13 +23,8 @@ type RedisOptions struct {
 }
 
 type Storage struct {
-	Pool  Handler
+	Pool  entity.Handler
 	mutex sync.Mutex
-}
-
-type Handler interface {
-	Get() redis.Conn
-	GetContext(context.Context) (redis.Conn, error)
 }
 
 func NewRedisRepo(opt *RedisOptions) *Storage {
@@ -43,7 +36,7 @@ func NewRedisRepo(opt *RedisOptions) *Storage {
 			MaxIdle:     opt.MaxIdleConn,
 			IdleTimeout: time.Duration(opt.Timeout) * time.Second,
 			Dial: func() (redis.Conn, error) {
-				conn, err := redis.Dial("tcp", opt.Address) //"127.0.0.1:6379"
+				conn, err := redis.Dial("tcp", opt.Address)
 				if err != nil {
 					log.Default().Print("[Redis Pool]:", err.Error())
 				}
