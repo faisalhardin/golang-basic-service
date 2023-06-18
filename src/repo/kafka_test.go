@@ -2,7 +2,6 @@ package repo
 
 import (
 	"testing"
-	"time"
 
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 )
@@ -40,7 +39,6 @@ func Test_SendMessage(t *testing.T) {
 			}
 
 			defer func() {
-				time.Sleep(10 * time.Second)
 				kaf.kafkaProducer.Close()
 			}()
 

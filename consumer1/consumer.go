@@ -3,16 +3,53 @@ package main
 import (
 	"fmt"
 	"os"
+	"sync"
+	"task1/src"
+	"task1/src/repo"
 	"time"
 
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 )
 
 func main() {
+	i := Start()
+	os.Exit(i)
+}
 
-	numOfConsumer := 1
+func Start() int {
+	redisRepo := repo.NewRedisRepo(&repo.RedisOptions{
+		Address: "127.0.0.1:6379",
+	})
 
-	generateConsumer(fmt.Sprintf("groupID%v", numOfConsumer))
+	ohlc := src.NewOHLCRecords(&src.OHLC{
+		Store: redisRepo,
+	})
+
+	consumer, err := repo.NewKafkaConsumer(repo.KafkaOption{
+		ServerHost:      "localhost:29092",
+		ConsumerGroupID: "stock-summary",
+	})
+	if err != nil {
+		panic(err)
+	}
+
+	consumer.RegisterHandler("stock-transaction", ohlc.InsertNewRecordFromKafka, 2)
+
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	go func(this *repo.KafkaConsumer) {
+
+		for {
+			if consumer.IsClosed() {
+				wg.Done()
+			}
+		}
+
+	}(&consumer)
+
+	wg.Wait()
+
+	return 0
 
 }
 
@@ -42,7 +79,6 @@ func generateConsumer(groupID string) {
 	for run {
 		var out string
 		msg, err := c.ReadMessage(time.Second)
-		time.Sleep(time.Second * 1)
 		if err == nil {
 			out = fmt.Sprintf("Message on groupID %s %s: %s #%s\n", groupID, msg.TopicPartition, string(msg.Value), string(msg.Key))
 		} else if !err.(kafka.Error).IsTimeout() {

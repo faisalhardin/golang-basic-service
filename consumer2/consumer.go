@@ -18,8 +18,8 @@ func main() {
 func generateConsumer(groupID string) {
 	c, err := kafka.NewConsumer(&kafka.ConfigMap{
 		"bootstrap.servers": "localhost:29092",
-		"group.id":          "same",
-		"auto.offset.reset": "earliest",
+		"group.id":          "stock-trx",
+		"auto.offset.reset": "latest",
 	})
 
 	if err != nil {
@@ -41,7 +41,6 @@ func generateConsumer(groupID string) {
 	for run {
 		var out string
 		msg, err := c.ReadMessage(time.Second)
-		time.Sleep(time.Second * 1)
 		if err == nil {
 			out = fmt.Sprintf("Message on groupID %s %s: %s #%s\n", groupID, msg.TopicPartition, string(msg.Value), string(msg.Key))
 		} else if !err.(kafka.Error).IsTimeout() {

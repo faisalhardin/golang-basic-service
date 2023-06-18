@@ -2,11 +2,12 @@ package src
 
 import (
 	"fmt"
-	"math"
+	"log"
 	"strconv"
 	"task1/entity"
 	"task1/src/repo"
 
+	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	"github.com/gomodule/redigo/redis"
 	"github.com/pkg/errors"
 )
@@ -70,23 +71,50 @@ func (rec OHLC) SetSummaryLog(stockCode string, summary entity.Summary) entity.S
 }
 
 func (rec OHLC) InsertNewRecord(trx entity.Transaction) (err error) {
-	quantity, err := strconv.ParseInt(trx.Quantity, 10, 64)
-	if err != nil {
-		err = errors.Wrap(err, "InsertNewRecord. Quantity"+trx.Quantity)
-		return
+
+	var quantity int64 = 0
+	if trx.Quantity != "" {
+		quantity, err = strconv.ParseInt(trx.Quantity, 10, 64)
+		if err != nil {
+			err = errors.Wrap(err, "InsertNewRecord. Quantity"+trx.Quantity)
+			return
+		}
 	}
 
-	price, err := strconv.ParseInt(trx.Price, 10, 64)
-	if err != nil {
-		err = errors.Wrap(err, "InsertNewRecord. Price ="+trx.Price)
-		return
+	var executedQuantity int64 = 0
+	if trx.ExecutedQuantity != "" {
+		executedQuantity, err = strconv.ParseInt(trx.ExecutedQuantity, 10, 64)
+		if err != nil {
+			err = errors.Wrap(err, "InsertNewRecord. Executed Quantity"+trx.ExecutedQuantity)
+			return
+		}
+	}
+
+	var price int64
+	if trx.Price != "" {
+		price, err = strconv.ParseInt(trx.Price, 10, 64)
+		if err != nil {
+			err = errors.Wrap(err, "InsertNewRecord. Price ="+trx.Price)
+			return
+		}
+	}
+
+	var executedPrice int64 = 0
+	if trx.ExecutedPrice != "" {
+		executedPrice, err = strconv.ParseInt(trx.ExecutedPrice, 10, 64)
+		if err != nil {
+			err = errors.Wrap(err, "InsertNewRecord. Executed Price ="+trx.ExecutedPrice)
+			return
+		}
 	}
 
 	newEntry := entity.MstTransaction{
-		Type:     trx.Type,
-		Stock:    trx.Stock,
-		Quantity: quantity,
-		Price:    price,
+		Type:             trx.Type,
+		Stock:            trx.Stock,
+		Quantity:         quantity,
+		ExecutedQuantity: executedQuantity,
+		Price:            price,
+		ExecutedPrice:    executedPrice,
 	}
 
 	if _, found := rec.transactionLog[trx.Stock]; !found {
@@ -108,7 +136,7 @@ func (rec OHLC) InsertNewRecord(trx entity.Transaction) (err error) {
 func (rec OHLC) CalculateRecordsByStockCode(trx entity.MstTransaction) (err error) {
 	summary, found := rec.summaryLog[trx.Stock]
 	if !found {
-		summary.LowestPrice = math.MaxInt64
+		summary.LowestPrice = 0
 	}
 
 	summary, err = rec.GetRedisSummaryLog(trx.Stock)
@@ -116,34 +144,36 @@ func (rec OHLC) CalculateRecordsByStockCode(trx entity.MstTransaction) (err erro
 		err = errors.Wrap(err, "CalculateRecordsByStockCode")
 		return err
 	}
-	if errors.Is(err, redis.ErrNil) {
-		summary.LowestPrice = math.MaxInt64
+	if err != nil && errors.Is(err, redis.ErrNil) {
+		summary.LowestPrice = 0
 		err = nil
 	}
 
 	if trx.Type == "E" || trx.Type == "P" {
-		summary.Volume += trx.Quantity
-		summary.Value += trx.Quantity * trx.Price
-		if summary.HighestPrice < trx.Price {
-			summary.HighestPrice = trx.Price
+		summary.Volume += trx.ExecutedQuantity
+		summary.Value += trx.ExecutedQuantity * trx.ExecutedPrice
+		if summary.HighestPrice < trx.ExecutedPrice {
+			summary.HighestPrice = trx.ExecutedPrice
 		}
-		if summary.LowestPrice > trx.Price {
-			summary.LowestPrice = trx.Price
+		if summary.LowestPrice > trx.ExecutedPrice {
+			summary.LowestPrice = trx.ExecutedPrice
 		}
 
 		if summary.IsNewDay > 0 {
-			summary.OpenPrice = trx.Price
+			summary.OpenPrice = trx.ExecutedPrice
 			summary.IsNewDay = 0
 		}
 
-		summary.ClosePrice = trx.Price
+		summary.ClosePrice = trx.ExecutedPrice
 	}
-	if trx.Quantity == 0 {
+	if (trx.Type == "E" || trx.Type == "P") && trx.ExecutedQuantity == 0 ||
+		!(trx.Type == "E" || trx.Type == "P") && trx.Quantity == 0 {
 		summary.PreviousPrice = trx.Price
 		summary.IsNewDay = 1
 	}
 
 	rec.summaryLog[trx.Stock] = summary
+
 	err = rec.SetRedisSummaryLog(trx.Stock, summary)
 	if err != nil {
 		err = errors.Wrap(err, "CalculateRecordsByStockCode")
@@ -152,4 +182,23 @@ func (rec OHLC) CalculateRecordsByStockCode(trx entity.MstTransaction) (err erro
 
 	return nil
 
+}
+
+func (rec OHLC) InsertNewRecordFromKafka(msg *kafka.Message) (err error) {
+
+	transaction, err := ConvertToStruct(msg.Value)
+	if err != nil {
+		err = errors.Wrap(err, "InsertNewRecordFromKafka")
+		log.Fatal(err)
+		return
+	}
+
+	err = rec.InsertNewRecord(transaction)
+	if err != nil {
+		err = errors.Wrap(err, "InsertNewRecordFromKafka")
+		log.Fatal(err)
+		return
+	}
+
+	return nil
 }

@@ -10,17 +10,21 @@ var (
 )
 
 type Transaction struct {
-	Type     string `json:"type"`
-	Stock    string `json:"stock_code"`
-	Quantity string `json:"order_book"`
-	Price    string `json:"price"`
+	Type             string `json:"type"`
+	Stock            string `json:"stock_code"`
+	Quantity         string `json:"quantity"`
+	ExecutedQuantity string `json:"executed_quantity"`
+	Price            string `json:"price"`
+	ExecutedPrice    string `json:"execution_price"`
 }
 
 type MstTransaction struct {
-	Type     string `json:"type"`
-	Stock    string `json:"stock_code"`
-	Quantity int64  `json:"quantity"`
-	Price    int64  `json:"price"`
+	Type             string `json:"type"`
+	Stock            string `json:"stock_code"`
+	Quantity         int64  `json:"quantity"`
+	ExecutedQuantity int64  `json:"executed_quantity"`
+	Price            int64  `json:"price"`
+	ExecutedPrice    int64  `json:"execution_price"`
 }
 
 type Summary struct {
@@ -67,4 +71,9 @@ func (s *Summary) ConvertFromHGetAllToStruct(redisResponse []string) (err error)
 	}
 
 	return
+}
+
+type StockCodeToTransactionLogKeyValue struct {
+	StockCode      []byte
+	TransactionLog []byte
 }
