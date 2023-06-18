@@ -27,7 +27,7 @@ func main() {
 	for record := range trxLogs {
 		messagingProducers.SendMessage(&kafka.Message{
 			Key:   []byte(record.StockCode),
-			Value: record.TransactionLog,
+			Value: []byte(record.TransactionLog),
 		})
 	}
 

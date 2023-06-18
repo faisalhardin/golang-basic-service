@@ -11,6 +11,10 @@ import (
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 )
 
+var (
+	numOfConsumer = 3
+)
+
 func main() {
 	i := Start()
 	os.Exit(i)
@@ -33,7 +37,7 @@ func Start() int {
 		panic(err)
 	}
 
-	consumer.RegisterHandler("stock-transaction", ohlc.InsertNewRecordFromKafka, 2)
+	consumer.RegisterHandler("stock-transaction", ohlc.InsertNewRecordFromKafka, numOfConsumer)
 
 	wg := &sync.WaitGroup{}
 	wg.Add(1)

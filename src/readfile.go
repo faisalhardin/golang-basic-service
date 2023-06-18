@@ -8,6 +8,9 @@ import (
 	"log"
 	"os"
 	"task1/entity"
+	"task1/src/repo"
+
+	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 )
 
 func ListFiles(fileDir string) (fileNames []string, err error) {
@@ -27,7 +30,6 @@ func ListFiles(fileDir string) (fileNames []string, err error) {
 }
 
 func ReadFiles(filePath string) (transactionLogs []entity.Transaction, err error) {
-	filePath = "./subsetdata/2022-11-10-1668042139551695521.ndjson"
 	f, err := os.OpenFile(filePath, os.O_RDONLY, os.ModePerm)
 	if err != nil {
 		log.Fatalf("open file error: %v", err)
@@ -44,6 +46,35 @@ func ReadFiles(filePath string) (transactionLogs []entity.Transaction, err error
 		}
 
 		transactionLogs = append(transactionLogs, transaction)
+	}
+
+	if err := sc.Err(); err != nil {
+		log.Fatalf("scan file error: %v", err)
+	}
+
+	return transactionLogs, err
+}
+
+func ReadFilesAndSendMessage(prefix string, filePath string, msgKafka *repo.KafkaOption) (transactionLogs []entity.Transaction, err error) {
+	f, err := os.OpenFile(fmt.Sprintf("%s/%s", prefix, filePath), os.O_RDONLY, os.ModePerm)
+	if err != nil {
+		log.Fatalf("open file error: %v", err)
+		return
+	}
+	defer f.Close()
+
+	sc := bufio.NewScanner(f)
+	for sc.Scan() {
+		trxLine := sc.Bytes()
+		transaction, e := ConvertToStruct(trxLine)
+		if e != nil {
+			return
+		}
+
+		msgKafka.SendMessage(&kafka.Message{
+			Key:   []byte(transaction.Stock),
+			Value: trxLine,
+		})
 	}
 
 	if err := sc.Err(); err != nil {
@@ -72,8 +103,8 @@ func ReadFilesWithChannel(prefix string, filePaths []string) <-chan entity.Stock
 				}
 
 				stockCodeToTransactionLogKeyValue := entity.StockCodeToTransactionLogKeyValue{
-					StockCode:      []byte(transaction.Stock),
-					TransactionLog: trxLine,
+					StockCode:      transaction.Stock,
+					TransactionLog: string(trxLine),
 				}
 
 				record <- stockCodeToTransactionLogKeyValue

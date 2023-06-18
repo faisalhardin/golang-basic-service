@@ -134,12 +134,7 @@ func (rec OHLC) InsertNewRecord(trx entity.Transaction) (err error) {
 }
 
 func (rec OHLC) CalculateRecordsByStockCode(trx entity.MstTransaction) (err error) {
-	summary, found := rec.summaryLog[trx.Stock]
-	if !found {
-		summary.LowestPrice = 0
-	}
-
-	summary, err = rec.GetRedisSummaryLog(trx.Stock)
+	summary, err := rec.GetRedisSummaryLog(trx.Stock)
 	if err != nil && !errors.Is(err, redis.ErrNil) {
 		err = errors.Wrap(err, "CalculateRecordsByStockCode")
 		return err
@@ -172,8 +167,6 @@ func (rec OHLC) CalculateRecordsByStockCode(trx entity.MstTransaction) (err erro
 		summary.IsNewDay = 1
 	}
 
-	rec.summaryLog[trx.Stock] = summary
-
 	err = rec.SetRedisSummaryLog(trx.Stock, summary)
 	if err != nil {
 		err = errors.Wrap(err, "CalculateRecordsByStockCode")
@@ -188,7 +181,7 @@ func (rec OHLC) InsertNewRecordFromKafka(msg *kafka.Message) (err error) {
 
 	transaction, err := ConvertToStruct(msg.Value)
 	if err != nil {
-		err = errors.Wrap(err, "InsertNewRecordFromKafka")
+		err = errors.Wrap(err, "InsertNewRecordFromKafka"+string(msg.Value))
 		log.Fatal(err)
 		return
 	}

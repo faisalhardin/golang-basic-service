@@ -74,6 +74,6 @@ func (s *Summary) ConvertFromHGetAllToStruct(redisResponse []string) (err error)
 }
 
 type StockCodeToTransactionLogKeyValue struct {
-	StockCode      []byte
-	TransactionLog []byte
+	StockCode      string
+	TransactionLog string
 }
