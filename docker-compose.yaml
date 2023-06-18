@@ -16,8 +16,6 @@ services:
       - zookeeper
     ports:
       - 29092:29092
-    # expose:
-    #   - '29092'
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
@@ -44,3 +42,10 @@ services:
       echo -e 'Successfully created the following topics:'
       kafka-topics --bootstrap-server broker:9092 --list
       "
+
+  redis:
+      image: redis:latest
+      container_name: redis
+      restart: always
+      ports:
+        - '6379:6379'
