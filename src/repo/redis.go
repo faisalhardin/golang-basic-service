@@ -2,7 +2,6 @@ package repo
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"sync"
 	"task1/entity"
@@ -11,6 +10,10 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/gomodule/redigo/redis"
+)
+
+var (
+	redisStrings func(reply interface{}, err error) ([]string, error)
 )
 
 type RedisOptions struct {
@@ -50,6 +53,8 @@ func NewRedisRepo(opt *RedisOptions) *Storage {
 		},
 	}
 
+	redisStrings = redis.Strings
+
 	return storage
 }
 
@@ -57,37 +62,6 @@ func (storage Storage) Ping() error {
 	conn := storage.Pool.Get()
 	_, err := conn.Do("PING")
 	return err
-}
-
-func (storage Storage) SetKeyValue(key string, value interface{}) (string, error) {
-	conn := storage.Pool.Get()
-	defer conn.Close()
-	resp, err := redis.String(conn.Do("SET", key, value))
-	return resp, err
-}
-
-func (storage Storage) Get(key string) (string, error) {
-	conn := storage.Pool.Get()
-	defer conn.Close()
-	resp, err := redis.String(conn.Do("GET", key))
-	if err == redis.ErrNil {
-		return "", fmt.Errorf("not found")
-	}
-	return resp, err
-}
-
-// HGet key and value
-func (storage Storage) HGet(key, field string) (string, error) {
-	conn := storage.Pool.Get()
-	defer conn.Close()
-	return redis.String(conn.Do("HGET", key, field))
-}
-
-// HGetAll key and value
-func (storage Storage) HGetAll(key string) ([]string, error) {
-	conn := storage.Pool.Get()
-	defer conn.Close()
-	return redis.Strings(conn.Do("HGETALL", key))
 }
 
 //HSet set has map
@@ -101,7 +75,7 @@ func (storage Storage) HSet(key, field string, value interface{}) (int64, error)
 func (storage Storage) HGetSummary(key string) (summary entity.Summary, err error) {
 	conn := storage.Pool.Get()
 	defer conn.Close()
-	resp, err := redis.Strings(conn.Do("HGETALL", key))
+	resp, err := redisStrings(conn.Do("HGETALL", key))
 	if err != nil {
 		err = errors.Wrap(err, "HGetSummary")
 		return summary, err
