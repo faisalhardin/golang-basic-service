@@ -1,10 +1,11 @@
-package src
+package calculation
 
 import (
 	"fmt"
 	"log"
 	"strconv"
 	"task1/entity"
+	"task1/src/filereader"
 	"task1/src/repo"
 
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
@@ -159,7 +160,7 @@ func (rec OHLC) CalculateRecordsByStockCode(trx entity.MstTransaction) (err erro
 		summary.IsNewDay = 1
 	}
 
-	log.Default().Print(summary, trx.Stock, trx.Type)
+	log.Default().Print(summary, " stock: ", trx.Stock, " type: ", trx.Type)
 	err = rec.SetRedisSummaryLog(trx.Stock, summary)
 	if err != nil {
 		err = errors.Wrap(err, "CalculateRecordsByStockCode")
@@ -172,7 +173,7 @@ func (rec OHLC) CalculateRecordsByStockCode(trx entity.MstTransaction) (err erro
 
 func (rec OHLC) InsertNewRecordFromKafka(msg *kafka.Message) (err error) {
 
-	transaction, err := ConvertToStruct(msg.Value)
+	transaction, err := filereader.ConvertToStruct(msg.Value)
 	if err != nil {
 		err = errors.Wrap(err, "InsertNewRecordFromKafka"+string(msg.Value))
 		log.Fatal(err)

@@ -1,44 +1,44 @@
 package main
 
 import (
-	"fmt"
+	"log"
+	"os"
+	"task1/src/filereader"
+	"task1/src/repo"
 
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 )
 
 func main() {
+	i := StartProducer()
+	os.Exit(i)
+}
 
-	p, err := kafka.NewProducer(&kafka.ConfigMap{"bootstrap.servers": "localhost:29092"})
+func StartProducer() int {
+
+	messagingProducers, err := repo.NewKafkaProducer(&repo.KafkaOption{
+		ServerHost: "localhost:29092",
+		Topic:      "stock-transaction",
+	})
 	if err != nil {
 		panic(err)
 	}
 
-	defer p.Close()
+	defer messagingProducers.CloseProducer()
 
-	// Delivery report handler for produced messages
-	go func() {
-		for e := range p.Events() {
-			switch ev := e.(type) {
-			case *kafka.Message:
-				if ev.TopicPartition.Error != nil {
-					fmt.Printf("Delivery failed: %v\n", ev.TopicPartition)
-				} else {
-					fmt.Printf("Delivered message to %v\n", ev.TopicPartition)
-				}
-			}
-		}
-	}()
-
-	// Produce messages to topic (asynchronously)
-	topic := "stock-transaction"
-	for _, word := range []string{"BBCA", "BBRI", "GOTO", "BBCA", "BBCA", "BBRI", "BBCA"} {
-		p.Produce(&kafka.Message{
-			TopicPartition: kafka.TopicPartition{Topic: &topic, Partition: kafka.PartitionAny},
-			Value:          []byte(word),
-			Key:            []byte(word),
-		}, nil)
+	listOfFiles, err := filereader.ListFiles("./subsetdata/")
+	if err != nil {
+		log.Fatal(err)
 	}
 
-	// Wait for message deliveries before shutting down
-	p.Flush(15 * 1000)
+	trxLogs := filereader.ReadFilesWithChannel("./subsetdata", listOfFiles)
+	for record := range trxLogs {
+		messagingProducers.SendMessage(&kafka.Message{
+			Key:   []byte(record.StockCode),
+			Value: []byte(record.TransactionLog),
+		})
+	}
+
+	return 0
+
 }

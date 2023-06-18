@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 	"sync"
-	"task1/src"
+	"task1/src/calculation"
 	"task1/src/repo"
 	"time"
 
@@ -16,16 +16,16 @@ var (
 )
 
 func main() {
-	i := Start()
+	i := StartConsumer()
 	os.Exit(i)
 }
 
-func Start() int {
+func StartConsumer() int {
 	redisRepo := repo.NewRedisRepo(&repo.RedisOptions{
 		Address: "127.0.0.1:6379",
 	})
 
-	ohlc := src.NewOHLCRecords(&src.OHLC{
+	ohlc := calculation.NewOHLCRecords(&calculation.OHLC{
 		Store: redisRepo,
 	})
 
