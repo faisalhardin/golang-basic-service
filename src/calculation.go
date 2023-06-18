@@ -117,14 +117,6 @@ func (rec OHLC) InsertNewRecord(trx entity.Transaction) (err error) {
 		ExecutedPrice:    executedPrice,
 	}
 
-	if _, found := rec.transactionLog[trx.Stock]; !found {
-		rec.transactionLog[trx.Stock] = []entity.MstTransaction{
-			newEntry,
-		}
-	} else {
-		rec.transactionLog[trx.Stock] = append(rec.transactionLog[trx.Stock], newEntry)
-	}
-
 	err = rec.CalculateRecordsByStockCode(newEntry)
 	if err != nil {
 		err = errors.Wrap(err, "InsertNewRecord")
@@ -167,6 +159,7 @@ func (rec OHLC) CalculateRecordsByStockCode(trx entity.MstTransaction) (err erro
 		summary.IsNewDay = 1
 	}
 
+	log.Default().Print(summary, trx.Stock, trx.Type)
 	err = rec.SetRedisSummaryLog(trx.Stock, summary)
 	if err != nil {
 		err = errors.Wrap(err, "CalculateRecordsByStockCode")
