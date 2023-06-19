@@ -2,7 +2,6 @@ package mockrepo
 
 import (
 	"bufio"
-	"io"
 )
 
 var GetBuffioErrFunc func() error
@@ -22,37 +21,33 @@ type ScannerInterface interface {
 }
 
 type NewScanner interface {
-	NewScanner(r io.Reader) ScannerInterface
-}
-
-type BufioNewScanner struct {
-	NewScanner
-}
-
-type MockScanner struct {
 	ScannerInterface
 }
 
-func (s *MockScanner) Err() error {
+type BufioNewScanner struct {
+	ScannerInterface
+}
+
+func (s *BufioNewScanner) Err() error {
 	return GetBuffioErrFunc()
 }
 
-func (s *MockScanner) Bytes() []byte {
+func (s *BufioNewScanner) Bytes() []byte {
 	return GetBuffioBytesFunc()
 }
 
-func (s *MockScanner) Text() string {
+func (s *BufioNewScanner) Text() string {
 	return GetBuffioTextFunc()
 }
 
-func (s *MockScanner) Scan() bool {
+func (s *BufioNewScanner) Scan() bool {
 	return GetBuffioScanFunc()
 }
 
-func (s *MockScanner) Buffer(buf []byte, max int) {
+func (s *BufioNewScanner) Buffer(buf []byte, max int) {
 	GetBuffioBufferFunc(buf, max)
 }
 
-func (s *MockScanner) Split(split bufio.SplitFunc) {
+func (s *BufioNewScanner) Split(split bufio.SplitFunc) {
 	GetBuffioSplitFunc(split)
 }

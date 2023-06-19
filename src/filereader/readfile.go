@@ -4,10 +4,12 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"os"
 	"task1/entity"
+	mockrepo "task1/entity/mock"
 	"task1/src/repo"
 
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
@@ -16,7 +18,7 @@ import (
 var (
 	ioutilReadDir   = ioutil.ReadDir
 	osOpenFile      = os.OpenFile
-	bufioNewScanner = bufio.NewScanner
+	bufioNewScanner = BufioNewScanner
 )
 
 func ListFiles(fileDir string) (fileNames []string, err error) {
@@ -114,4 +116,8 @@ func ReadFilesWithChannel(prefix string, filePaths []string) <-chan entity.Stock
 func ConvertToStruct(line []byte) (transaction entity.Transaction, err error) {
 	err = json.Unmarshal(line, &transaction)
 	return transaction, err
+}
+
+func BufioNewScanner(r io.Reader) mockrepo.NewScanner {
+	return bufio.NewScanner(r)
 }
