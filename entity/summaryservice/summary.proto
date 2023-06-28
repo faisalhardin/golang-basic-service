@@ -1,0 +1,27 @@
+syntax = "proto3";
+package summary_proto;
+
+option go_package = "google/protobuf/summary.proto";
+
+message Summary {
+	string stock = 1;
+	int64 previousprice = 2;
+	int64 openprice = 3;
+	int64 highestprice = 4;
+	int64 lowestprice = 5;
+	int64 closeprice = 6;
+	int64 volume = 7;
+	int64 value = 8;
+}
+
+message GetStockSummaryRequest {
+	string stock = 1;
+}
+
+message GetStockSummaryResponse {
+	Summary summary = 1;
+}
+
+service SummaryService {
+	rpc GetSummary(GetStockSummaryRequest) returns (GetStockSummaryResponse);
+}
