@@ -24,5 +24,3 @@ func GetFieldNames(s interface{}) (fieldNames []string, err error) {
 
 	return
 }
-
-// func ConvertFromHGetAllToStruct ()

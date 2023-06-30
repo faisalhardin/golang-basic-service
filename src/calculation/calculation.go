@@ -14,6 +14,10 @@ import (
 
 var (
 	StoreSummaryStockAsKeyFormat = "summarystock:%s"
+
+	filereaderConvertToStruct func(line []byte) (transaction entity.Transaction, err error)
+
+	ohlcInsertNewRecord func(trx entity.Transaction) (err error)
 )
 
 type OHLC struct {
@@ -26,11 +30,16 @@ func NewOHLCRecords(records *OHLC) *OHLC {
 	newLogs := make(map[string][]entity.MstTransaction)
 	newSummary := make(map[string]entity.Summary)
 
-	return &OHLC{
+	records = &OHLC{
 		transactionLog: newLogs,
 		summaryLog:     newSummary,
 		Store:          records.Store,
 	}
+
+	filereaderConvertToStruct = filereader.ConvertToStruct
+	ohlcInsertNewRecord = records.InsertNewRecord
+
+	return records
 }
 
 func (rec OHLC) GetTransactionLog(stockCode string) []entity.MstTransaction {
@@ -39,7 +48,7 @@ func (rec OHLC) GetTransactionLog(stockCode string) []entity.MstTransaction {
 
 func (rec OHLC) GetRedisSummaryLog(stockCode string) (summary entity.Summary, err error) {
 	summary, err = rec.Store.HGetSummary(fmt.Sprintf(StoreSummaryStockAsKeyFormat, stockCode))
-	if err != nil && !errors.Is(err, redis.ErrNil) {
+	if err != nil {
 		err = errors.Wrap(err, "GetSummaryLog")
 	}
 
@@ -61,8 +70,13 @@ func (rec OHLC) SetRedisSummaryLog(stockCode string, summary entity.Summary) (er
 	return nil
 }
 
-func (rec OHLC) GetSummaryLog(stockCode string) entity.Summary {
-	return rec.summaryLog[stockCode]
+func (rec OHLC) GetSummaryLog(stockCode string) (summary entity.Summary, err error) {
+	summary, err = rec.GetRedisSummaryLog(stockCode)
+	if err != nil {
+		err = errors.Wrap(err, "CalculateRecordsByStockCode")
+	}
+
+	return
 }
 
 func (rec OHLC) SetSummaryLog(stockCode string, summary entity.Summary) entity.Summary {
@@ -126,7 +140,7 @@ func (rec OHLC) InsertNewRecord(trx entity.Transaction) (err error) {
 }
 
 func (rec OHLC) CalculateRecordsByStockCode(trx entity.MstTransaction) (err error) {
-	summary, err := rec.GetRedisSummaryLog(trx.Stock)
+	summary, err := rec.GetSummaryLog(trx.Stock)
 	if err != nil && !errors.Is(err, redis.ErrNil) {
 		err = errors.Wrap(err, "CalculateRecordsByStockCode")
 		return err
@@ -172,14 +186,14 @@ func (rec OHLC) CalculateRecordsByStockCode(trx entity.MstTransaction) (err erro
 
 func (rec OHLC) InsertNewRecordFromKafka(msg *kafka.Message) (err error) {
 
-	transaction, err := filereader.ConvertToStruct(msg.Value)
+	transaction, err := filereaderConvertToStruct(msg.Value)
 	if err != nil {
 		err = errors.Wrap(err, "InsertNewRecordFromKafka"+string(msg.Value))
 		log.Fatal(err)
 		return
 	}
 
-	err = rec.InsertNewRecord(transaction)
+	err = ohlcInsertNewRecord(transaction)
 	if err != nil {
 		err = errors.Wrap(err, "InsertNewRecordFromKafka")
 		log.Fatal(err)

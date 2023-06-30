@@ -51,21 +51,21 @@ func NewRedisRepo(opt *RedisOptions) *Storage {
 	return storage
 }
 
-func (storage Storage) Ping() error {
+func (storage *Storage) Ping() error {
 	conn := storage.Pool.Get()
 	_, err := conn.Do("PING")
 	return err
 }
 
 //HSet set has map
-func (storage Storage) HSet(key, field string, value interface{}) (int64, error) {
+func (storage *Storage) HSet(key, field string, value interface{}) (int64, error) {
 	conn := storage.Pool.Get()
 	defer conn.Close()
 	resp, err := redis.Int64(conn.Do("HSET", key, field, value))
 	return resp, err
 }
 
-func (storage Storage) HGetSummary(key string) (summary entity.Summary, err error) {
+func (storage *Storage) HGetSummary(key string) (summary entity.Summary, err error) {
 	conn := storage.Pool.Get()
 	defer conn.Close()
 	resp, err := redisStrings(conn.Do("HGETALL", key))
@@ -99,7 +99,7 @@ func (storage Storage) HSetSummary(key string, summary entity.Summary) (int64, e
 	return resp, err
 }
 
-func (storage Storage) Del(key string) (int64, error) {
+func (storage *Storage) Del(key string) (int64, error) {
 	conn := storage.Pool.Get()
 	defer conn.Close()
 	resp, err := redis.Int64(conn.Do("DEL", key))
