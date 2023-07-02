@@ -28,6 +28,10 @@ func (s GRPCServiceHandler) GetSummary(ctx context.Context, summary *summary_pro
 	err = nil
 
 	resp = &summary_proto.GetStockSummaryResponse{}
+	var average int64
+	if ohlcSummary.Volume > 0 {
+		average = ohlcSummary.Value / ohlcSummary.Volume
+	}
 	resp.Summary = &summary_proto.Summary{
 		Stock:         summary.Stock,
 		Previousprice: ohlcSummary.PreviousPrice,
@@ -37,6 +41,7 @@ func (s GRPCServiceHandler) GetSummary(ctx context.Context, summary *summary_pro
 		Closeprice:    ohlcSummary.ClosePrice,
 		Value:         ohlcSummary.Value,
 		Volume:        ohlcSummary.Volume,
+		Average:       average,
 	}
 
 	return

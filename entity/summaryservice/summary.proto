@@ -12,6 +12,7 @@ message Summary {
 	int64 closeprice = 6;
 	int64 volume = 7;
 	int64 value = 8;
+	int64 average = 9;
 }
 
 message GetStockSummaryRequest {
