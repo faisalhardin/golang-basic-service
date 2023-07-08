@@ -1,3 +1,9 @@
+docker-up:
+	docker-compose up -d
+
+docker-down:
+	docker-compose down
+
 consumer:
 	@echo "===== RUNNING CONSUMER SERVICES ====="
 	go run src/consumer/consumer.go
