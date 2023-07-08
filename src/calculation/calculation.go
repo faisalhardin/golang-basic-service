@@ -202,6 +202,7 @@ func (rec OHLC) CalculateRecordsByStockCode(trx entity.MstTransaction) (err erro
 		}
 	}
 
+	log.Default().Print(summary, " stock: ", trx.Stock, " type: ", trx.Type)
 	err = summaryOperation.SetSummaryWhole(rec)
 	if err != nil {
 		return errors.Wrap(err, "CalculateRecordsByStockCode")
