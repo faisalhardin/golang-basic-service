@@ -9,6 +9,7 @@ import (
 
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	"github.com/golang/mock/gomock"
+	"github.com/gomodule/redigo/redis"
 )
 
 var (
@@ -69,10 +70,7 @@ func initMocks(t *testing.T) *gomock.Controller {
 }
 
 func Test_NewOHLCRecords(t *testing.T) {
-	mockOHLC := OHLC{
-		transactionLog: make(map[string][]entity.MstTransaction),
-		summaryLog:     make(map[string]entity.Summary),
-	}
+	mockOHLC := OHLC{}
 	type args struct {
 		ohlc *OHLC
 	}
@@ -124,9 +122,8 @@ func Test_InsertNewRecord(t *testing.T) {
 			patch: func() {
 				mockStorage.EXPECT().HGetSummary(gomock.Any()).
 					Return(mockGetSummary, nil).Times(1)
-				mockStorage.EXPECT().Del(gomock.Any()).Return(int64(1), nil).Times(1)
-				mockStorage.EXPECT().HSetSummary(gomock.Any(), gomock.Any()).
-					Return(int64(1), nil).Times(1)
+				mockStorage.EXPECT().HSet(gomock.Any(), gomock.Any(), gomock.Any()).
+					Return(int64(1), nil).Times(4)
 			},
 		},
 		{
@@ -139,9 +136,8 @@ func Test_InsertNewRecord(t *testing.T) {
 			patch: func() {
 				mockStorage.EXPECT().HGetSummary(gomock.Any()).
 					Return(mockGetSummary, nil).Times(1)
-				mockStorage.EXPECT().Del(gomock.Any()).Return(int64(1), nil).Times(1)
-				mockStorage.EXPECT().HSetSummary(gomock.Any(), gomock.Any()).
-					Return(int64(1), nil).Times(1)
+				mockStorage.EXPECT().HSet(gomock.Any(), gomock.Any(), gomock.Any()).
+					Return(int64(1), nil).Times(4)
 			},
 		},
 		{
@@ -154,6 +150,29 @@ func Test_InsertNewRecord(t *testing.T) {
 			patch: func() {
 				mockStorage.EXPECT().HGetSummary(gomock.Any()).
 					Return(mockGetNewDayPriceSummary, nil).Times(1)
+				mockStorage.EXPECT().HSet(gomock.Any(), gomock.Any(), gomock.Any()).
+					Return(int64(1), nil).Times(8)
+			},
+		},
+		{
+			name: "Successful set whole summary InsertNewRecord",
+			args: args{
+				records: mockInsertOpenPriceTransaction,
+			},
+			wantSummary: entity.Summary{
+				Volume:        0,
+				Value:         0,
+				HighestPrice:  6000,
+				LowestPrice:   6000,
+				OpenPrice:     6000,
+				ClosePrice:    6000,
+				IsNewDay:      1,
+				PreviousPrice: 6000,
+			},
+			wantErr: false,
+			patch: func() {
+				mockStorage.EXPECT().HGetSummary(gomock.Any()).
+					Return(entity.Summary{}, redis.ErrNil).Times(1)
 				mockStorage.EXPECT().Del(gomock.Any()).Return(int64(1), nil).Times(1)
 				mockStorage.EXPECT().HSetSummary(gomock.Any(), gomock.Any()).
 					Return(int64(1), nil).Times(1)

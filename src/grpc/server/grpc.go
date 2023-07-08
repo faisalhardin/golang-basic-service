@@ -20,7 +20,7 @@ func NewGRPCServiceHandler(handler *GRPCServiceHandler) *GRPCServiceHandler {
 
 func (s GRPCServiceHandler) GetSummary(ctx context.Context, summary *summary_proto.GetStockSummaryRequest) (resp *summary_proto.GetStockSummaryResponse, err error) {
 
-	ohlcSummary, err := s.OHLCUsecase.GetSummaryLog(summary.Stock)
+	ohlcSummary, err := s.OHLCUsecase.GetRedisSummaryLog(summary.Stock)
 	if err != nil && !errors.Is(err, redis.ErrNil) {
 		err = errors.Wrap(err, "GRPCServiceHandler.GetSummary")
 		return

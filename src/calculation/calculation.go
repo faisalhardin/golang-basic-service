@@ -19,32 +19,24 @@ var (
 	filereaderConvertToStruct func(line []byte) (transaction entity.Transaction, err error)
 
 	ohlcInsertNewRecord func(trx entity.Transaction) (err error)
+
+	WrapMsgCalculateRecordsByStockCode = "CalculateRecordsByStockCode"
 )
 
 type OHLC struct {
-	transactionLog map[string][]entity.MstTransaction
-	summaryLog     map[string]entity.Summary
-	Store          entity.StorageInterface
+	Store entity.StorageInterface
 }
 
 func NewOHLCRecords(records *OHLC) *OHLC {
-	newLogs := make(map[string][]entity.MstTransaction)
-	newSummary := make(map[string]entity.Summary)
 
 	records = &OHLC{
-		transactionLog: newLogs,
-		summaryLog:     newSummary,
-		Store:          records.Store,
+		Store: records.Store,
 	}
 
 	filereaderConvertToStruct = filereader.ConvertToStruct
 	ohlcInsertNewRecord = records.InsertNewRecord
 
 	return records
-}
-
-func (rec OHLC) GetTransactionLog(stockCode string) []entity.MstTransaction {
-	return rec.transactionLog[stockCode]
 }
 
 func (rec OHLC) GetRedisSummaryLog(stockCode string) (summary entity.Summary, err error) {
@@ -78,20 +70,6 @@ func (rec OHLC) SetRedisSummaryLog(stockCode string, summary entity.Summary) (er
 		return err
 	}
 	return nil
-}
-
-func (rec OHLC) GetSummaryLog(stockCode string) (summary entity.Summary, err error) {
-	summary, err = rec.GetRedisSummaryLog(stockCode)
-	if err != nil {
-		err = errors.Wrap(err, "CalculateRecordsByStockCode")
-	}
-
-	return
-}
-
-func (rec OHLC) SetSummaryLog(stockCode string, summary entity.Summary) entity.Summary {
-	rec.summaryLog[stockCode] = summary
-	return summary
 }
 
 func (rec OHLC) InsertNewRecord(trx entity.Transaction) (err error) {
@@ -150,105 +128,83 @@ func (rec OHLC) InsertNewRecord(trx entity.Transaction) (err error) {
 }
 
 func (rec OHLC) CalculateRecordsByStockCode(trx entity.MstTransaction) (err error) {
-	isFound := true
-	summary, err := rec.GetSummaryLog(trx.Stock)
+	var summaryOperation SummaryOperation
+	summary, err := rec.GetRedisSummaryLog(trx.Stock)
+	if err == nil {
+		summaryOperation = &StoredSummary{
+			stockCode: trx.Stock,
+			summary:   summary,
+		}
+	}
 	if err != nil && !errors.Is(err, redis.ErrNil) {
-		err = errors.Wrap(err, "CalculateRecordsByStockCode")
+		err = errors.Wrap(err, WrapMsgCalculateRecordsByStockCode)
 		return err
 	}
 	if err != nil && errors.Is(err, redis.ErrNil) {
-		isFound = false
 		summary.LowestPrice = math.MaxInt32
+		summaryOperation = &UnstoredSummary{
+			stockCode: trx.Stock,
+			summary:   summary,
+		}
 		err = nil
 	}
 
 	if trx.Type == "E" || trx.Type == "P" {
-		summary.Volume += trx.ExecutedQuantity
-		summary.Value += trx.ExecutedQuantity * trx.ExecutedPrice
-		if isFound {
-			err = rec.SetRedisSummaryField(trx.Stock, "volume", summary.Volume)
-			if err != nil {
-				err = errors.Wrap(err, "CalculateRecordsByStockCode")
-				return err
-			}
-			err = rec.SetRedisSummaryField(trx.Stock, "value", summary.Value)
-			if err != nil {
-				err = errors.Wrap(err, "CalculateRecordsByStockCode")
-				return err
-			}
+		err = summaryOperation.SetSummaryVolume(rec, summary.Volume+trx.ExecutedQuantity)
+		if err != nil {
+			return errors.Wrap(err, "CalculateRecordsByStockCode")
 		}
+		err = summaryOperation.SetSummaryValue(rec, summary.Value+(trx.ExecutedQuantity*trx.ExecutedPrice))
+		if err != nil {
+			return errors.Wrap(err, "CalculateRecordsByStockCode")
+		}
+
 		if summary.HighestPrice < trx.ExecutedPrice {
-			summary.HighestPrice = trx.ExecutedPrice
-			if isFound {
-				err = rec.SetRedisSummaryField(trx.Stock, "highest_price", summary.HighestPrice)
-				if err != nil {
-					err = errors.Wrap(err, "CalculateRecordsByStockCode")
-					return err
-				}
-			}
-		}
-		if summary.LowestPrice > trx.ExecutedPrice {
-			summary.LowestPrice = trx.ExecutedPrice
-			if isFound {
-				err = rec.SetRedisSummaryField(trx.Stock, "lowest_price", summary.LowestPrice)
-				if err != nil {
-					err = errors.Wrap(err, "CalculateRecordsByStockCode")
-					return err
-				}
-			}
-		}
-
-		if summary.IsNewDay > 0 {
-			summary.OpenPrice = trx.ExecutedPrice
-			summary.IsNewDay = 0
-			if isFound {
-				err = rec.SetRedisSummaryField(trx.Stock, "open_price", summary.OpenPrice)
-				if err != nil {
-					err = errors.Wrap(err, "CalculateRecordsByStockCode")
-					return err
-				}
-				err = rec.SetRedisSummaryField(trx.Stock, "is_new_day", summary.IsNewDay)
-				if err != nil {
-					err = errors.Wrap(err, "CalculateRecordsByStockCode")
-					return err
-				}
-			}
-		}
-
-		summary.ClosePrice = trx.ExecutedPrice
-		if isFound {
-			err = rec.SetRedisSummaryField(trx.Stock, "close_price", summary.ClosePrice)
+			err = summaryOperation.SetSummaryHighesPrice(rec, trx.ExecutedPrice)
 			if err != nil {
-				err = errors.Wrap(err, "CalculateRecordsByStockCode")
-				return err
+				return errors.Wrap(err, "CalculateRecordsByStockCode")
 			}
+		}
+
+		if summary.LowestPrice > trx.ExecutedPrice {
+			err = summaryOperation.SetSummaryLowestPrice(rec, trx.ExecutedPrice)
+			if err != nil {
+				return errors.Wrap(err, "CalculateRecordsByStockCode")
+			}
+		}
+
+		if summary.IsCurrentlyNewDay() {
+			err = summaryOperation.SetSummaryOpenPrice(rec, trx.ExecutedPrice)
+			if err != nil {
+				return errors.Wrap(err, "CalculateRecordsByStockCode")
+			}
+			err = summaryOperation.SetSummaryIsNewDay(rec, entity.IsNewDayFalse)
+			if err != nil {
+				return errors.Wrap(err, "CalculateRecordsByStockCode")
+			}
+		}
+
+		err = summaryOperation.SetSummaryClosePrice(rec, trx.ExecutedPrice)
+		if err != nil {
+			return errors.Wrap(err, "CalculateRecordsByStockCode")
 		}
 	}
 	if (trx.Type == "E" || trx.Type == "P") && trx.ExecutedQuantity == 0 ||
 		(trx.Type != "E" && trx.Type != "P") && trx.Quantity == 0 {
-		summary.PreviousPrice = trx.Price
-		summary.IsNewDay = 1
-		if isFound {
-			err = rec.SetRedisSummaryField(trx.Stock, "previous_price", summary.PreviousPrice)
-			if err != nil {
-				err = errors.Wrap(err, "CalculateRecordsByStockCode")
-				return err
-			}
-			err = rec.SetRedisSummaryField(trx.Stock, "is_new_day", summary.IsNewDay)
-			if err != nil {
-				err = errors.Wrap(err, "CalculateRecordsByStockCode")
-				return err
-			}
+		err = summaryOperation.SetSummaryPreviousPrice(rec, trx.Price)
+		if err != nil {
+			return errors.Wrap(err, "CalculateRecordsByStockCode")
+		}
+
+		err = summaryOperation.SetSummaryIsNewDay(rec, entity.IsNewDayTrue)
+		if err != nil {
+			return errors.Wrap(err, "CalculateRecordsByStockCode")
 		}
 	}
 
-	log.Default().Print(summary, " stock: ", trx.Stock, " type: ", trx.Type)
-	if !isFound {
-		err = rec.SetRedisSummaryLog(trx.Stock, summary)
-		if err != nil {
-			err = errors.Wrap(err, "CalculateRecordsByStockCode")
-			return err
-		}
+	err = summaryOperation.SetSummaryWhole(rec)
+	if err != nil {
+		return errors.Wrap(err, "CalculateRecordsByStockCode")
 	}
 
 	return nil
@@ -272,4 +228,185 @@ func (rec OHLC) InsertNewRecordFromKafka(msg *kafka.Message) (err error) {
 	}
 
 	return nil
+}
+
+type StoredSummary struct {
+	stockCode string
+	summary   entity.Summary
+}
+
+func (s *StoredSummary) GetSummary() entity.Summary {
+	return s.summary
+}
+
+func (s *StoredSummary) SetSummaryVolume(ohlc OHLC, value int64) (err error) {
+	s.summary.Volume = value
+	err = ohlc.SetRedisSummaryField(s.stockCode, "volume", value)
+	if err != nil {
+		err = errors.Wrap(err, "SetSummaryVolume")
+		return err
+	}
+
+	return nil
+}
+
+func (s *StoredSummary) SetSummaryValue(ohlc OHLC, value int64) (err error) {
+	s.summary.Value = value
+	err = ohlc.SetRedisSummaryField(s.stockCode, "value", value)
+	if err != nil {
+		err = errors.Wrap(err, "SetSummaryValue")
+		return err
+	}
+
+	return nil
+}
+
+func (s *StoredSummary) SetSummaryHighesPrice(ohlc OHLC, value int64) (err error) {
+	s.summary.HighestPrice = value
+	err = ohlc.SetRedisSummaryField(s.stockCode, "highest_price", value)
+	if err != nil {
+		err = errors.Wrap(err, "SetSummaryHighesPrice")
+		return err
+	}
+
+	return nil
+}
+
+func (s *StoredSummary) SetSummaryLowestPrice(ohlc OHLC, value int64) (err error) {
+	s.summary.LowestPrice = value
+	err = ohlc.SetRedisSummaryField(s.stockCode, "lowest_price", value)
+	if err != nil {
+		err = errors.Wrap(err, "SetSummaryLowestPrice")
+		return err
+	}
+
+	return nil
+}
+
+func (s *StoredSummary) SetSummaryOpenPrice(ohlc OHLC, value int64) (err error) {
+	s.summary.OpenPrice = value
+	err = ohlc.SetRedisSummaryField(s.stockCode, "open_price", value)
+	if err != nil {
+		err = errors.Wrap(err, "SetSummaryOpenPrice")
+		return err
+	}
+
+	return nil
+}
+
+func (s *StoredSummary) SetSummaryIsNewDay(ohlc OHLC, value int64) (err error) {
+	s.summary.IsNewDay = value
+	err = ohlc.SetRedisSummaryField(s.stockCode, "is_new_day", value)
+	if err != nil {
+		err = errors.Wrap(err, "SetSummaryIsNewDay")
+		return err
+	}
+
+	return nil
+}
+
+func (s *StoredSummary) SetSummaryClosePrice(ohlc OHLC, value int64) (err error) {
+	s.summary.ClosePrice = value
+	err = ohlc.SetRedisSummaryField(s.stockCode, "close_price", value)
+	if err != nil {
+		err = errors.Wrap(err, "SetSummaryClosePrice")
+		return err
+	}
+
+	return nil
+}
+
+func (s *StoredSummary) SetSummaryPreviousPrice(ohlc OHLC, value int64) (err error) {
+	s.summary.PreviousPrice = value
+	err = ohlc.SetRedisSummaryField(s.stockCode, "previous_price", value)
+	if err != nil {
+		err = errors.Wrap(err, "SetSummaryPreviousPrice")
+		return err
+	}
+
+	return nil
+}
+
+func (s *StoredSummary) SetSummaryWhole(ohlc OHLC) (err error) {
+	return nil
+}
+
+type UnstoredSummary struct {
+	stockCode string
+	summary   entity.Summary
+}
+
+func (s *UnstoredSummary) GetSummary() entity.Summary {
+	return s.summary
+}
+
+func (s *UnstoredSummary) SetSummaryVolume(ohlc OHLC, value int64) (err error) {
+	s.summary.Volume = value
+
+	return nil
+}
+
+func (s *UnstoredSummary) SetSummaryValue(ohlc OHLC, value int64) (err error) {
+	s.summary.Value = value
+
+	return nil
+}
+
+func (s *UnstoredSummary) SetSummaryHighesPrice(ohlc OHLC, value int64) (err error) {
+	s.summary.HighestPrice = value
+
+	return nil
+}
+
+func (s *UnstoredSummary) SetSummaryLowestPrice(ohlc OHLC, value int64) (err error) {
+	s.summary.LowestPrice = value
+
+	return nil
+}
+
+func (s *UnstoredSummary) SetSummaryOpenPrice(ohlc OHLC, value int64) (err error) {
+	s.summary.OpenPrice = value
+
+	return nil
+}
+
+func (s *UnstoredSummary) SetSummaryIsNewDay(ohlc OHLC, value int64) (err error) {
+	s.summary.IsNewDay = value
+
+	return nil
+}
+
+func (s *UnstoredSummary) SetSummaryClosePrice(ohlc OHLC, value int64) (err error) {
+	s.summary.ClosePrice = value
+
+	return nil
+}
+
+func (s *UnstoredSummary) SetSummaryPreviousPrice(ohlc OHLC, value int64) (err error) {
+	s.summary.PreviousPrice = value
+
+	return nil
+}
+
+func (s *UnstoredSummary) SetSummaryWhole(ohlc OHLC) (err error) {
+	err = ohlc.SetRedisSummaryLog(s.stockCode, s.summary)
+	if err != nil {
+		err = errors.Wrap(err, "SetSummaryWhole")
+		return err
+	}
+
+	return nil
+}
+
+type SummaryOperation interface {
+	GetSummary() entity.Summary
+	SetSummaryVolume(ohlc OHLC, value int64) (err error)
+	SetSummaryValue(ohlc OHLC, value int64) (err error)
+	SetSummaryHighesPrice(ohlc OHLC, value int64) (err error)
+	SetSummaryLowestPrice(ohlc OHLC, value int64) (err error)
+	SetSummaryOpenPrice(ohlc OHLC, value int64) (err error)
+	SetSummaryIsNewDay(ohlc OHLC, value int64) (err error)
+	SetSummaryClosePrice(ohlc OHLC, value int64) (err error)
+	SetSummaryPreviousPrice(ohlc OHLC, value int64) (err error)
+	SetSummaryWhole(ohlc OHLC) (err error)
 }
