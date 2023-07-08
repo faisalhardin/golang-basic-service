@@ -3,6 +3,7 @@ package calculation
 import (
 	"fmt"
 	"log"
+	"math"
 	"strconv"
 	"task1/entity"
 	"task1/src/filereader"
@@ -53,6 +54,15 @@ func (rec OHLC) GetRedisSummaryLog(stockCode string) (summary entity.Summary, er
 	}
 
 	return summary, err
+}
+
+func (rec OHLC) SetRedisSummaryField(stockCode string, fieldName string, value interface{}) (err error) {
+	_, err = rec.Store.HSet(fmt.Sprintf(StoreSummaryStockAsKeyFormat, stockCode), fieldName, value)
+	if err != nil {
+		err = errors.Wrap(err, "SetRedisSummaryField")
+	}
+
+	return err
 }
 
 func (rec OHLC) SetRedisSummaryLog(stockCode string, summary entity.Summary) (err error) {
@@ -140,44 +150,105 @@ func (rec OHLC) InsertNewRecord(trx entity.Transaction) (err error) {
 }
 
 func (rec OHLC) CalculateRecordsByStockCode(trx entity.MstTransaction) (err error) {
+	isFound := true
 	summary, err := rec.GetSummaryLog(trx.Stock)
 	if err != nil && !errors.Is(err, redis.ErrNil) {
 		err = errors.Wrap(err, "CalculateRecordsByStockCode")
 		return err
 	}
 	if err != nil && errors.Is(err, redis.ErrNil) {
-		summary.LowestPrice = 0
+		isFound = false
+		summary.LowestPrice = math.MaxInt32
 		err = nil
 	}
 
 	if trx.Type == "E" || trx.Type == "P" {
 		summary.Volume += trx.ExecutedQuantity
 		summary.Value += trx.ExecutedQuantity * trx.ExecutedPrice
+		if isFound {
+			err = rec.SetRedisSummaryField(trx.Stock, "volume", summary.Volume)
+			if err != nil {
+				err = errors.Wrap(err, "CalculateRecordsByStockCode")
+				return err
+			}
+			err = rec.SetRedisSummaryField(trx.Stock, "value", summary.Value)
+			if err != nil {
+				err = errors.Wrap(err, "CalculateRecordsByStockCode")
+				return err
+			}
+		}
 		if summary.HighestPrice < trx.ExecutedPrice {
 			summary.HighestPrice = trx.ExecutedPrice
+			if isFound {
+				err = rec.SetRedisSummaryField(trx.Stock, "highest_price", summary.HighestPrice)
+				if err != nil {
+					err = errors.Wrap(err, "CalculateRecordsByStockCode")
+					return err
+				}
+			}
 		}
 		if summary.LowestPrice > trx.ExecutedPrice {
 			summary.LowestPrice = trx.ExecutedPrice
+			if isFound {
+				err = rec.SetRedisSummaryField(trx.Stock, "lowest_price", summary.LowestPrice)
+				if err != nil {
+					err = errors.Wrap(err, "CalculateRecordsByStockCode")
+					return err
+				}
+			}
 		}
 
 		if summary.IsNewDay > 0 {
 			summary.OpenPrice = trx.ExecutedPrice
 			summary.IsNewDay = 0
+			if isFound {
+				err = rec.SetRedisSummaryField(trx.Stock, "open_price", summary.OpenPrice)
+				if err != nil {
+					err = errors.Wrap(err, "CalculateRecordsByStockCode")
+					return err
+				}
+				err = rec.SetRedisSummaryField(trx.Stock, "is_new_day", summary.IsNewDay)
+				if err != nil {
+					err = errors.Wrap(err, "CalculateRecordsByStockCode")
+					return err
+				}
+			}
 		}
 
 		summary.ClosePrice = trx.ExecutedPrice
+		if isFound {
+			err = rec.SetRedisSummaryField(trx.Stock, "close_price", summary.ClosePrice)
+			if err != nil {
+				err = errors.Wrap(err, "CalculateRecordsByStockCode")
+				return err
+			}
+		}
 	}
 	if (trx.Type == "E" || trx.Type == "P") && trx.ExecutedQuantity == 0 ||
-		!(trx.Type == "E" || trx.Type == "P") && trx.Quantity == 0 {
+		(trx.Type != "E" && trx.Type != "P") && trx.Quantity == 0 {
 		summary.PreviousPrice = trx.Price
 		summary.IsNewDay = 1
+		if isFound {
+			err = rec.SetRedisSummaryField(trx.Stock, "previous_price", summary.PreviousPrice)
+			if err != nil {
+				err = errors.Wrap(err, "CalculateRecordsByStockCode")
+				return err
+			}
+			err = rec.SetRedisSummaryField(trx.Stock, "is_new_day", summary.IsNewDay)
+			if err != nil {
+				err = errors.Wrap(err, "CalculateRecordsByStockCode")
+				return err
+			}
+		}
 	}
 
 	log.Default().Print(summary, " stock: ", trx.Stock, " type: ", trx.Type)
-	err = rec.SetRedisSummaryLog(trx.Stock, summary)
-	if err != nil {
-		err = errors.Wrap(err, "CalculateRecordsByStockCode")
-		return err
+	if !isFound {
+		err = rec.SetRedisSummaryLog(trx.Stock, summary)
+		if err != nil {
+			err = errors.Wrap(err, "CalculateRecordsByStockCode")
+			return err
+		}
 	}
 
 	return nil
