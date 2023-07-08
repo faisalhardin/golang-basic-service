@@ -9,6 +9,11 @@ var (
 	ErrNotEvent = fmt.Errorf("parameter needs to be in event number consistiong of pair of key and value")
 )
 
+const (
+	IsNewDayTrue  int64 = 1
+	IsNewDayFalse int64 = 0
+)
+
 type Transaction struct {
 	Type             string `json:"type"`
 	Stock            string `json:"stock_code"`
@@ -36,6 +41,10 @@ type Summary struct {
 	Volume        int64 `json:"volume"`
 	Value         int64 `json:"value"`
 	IsNewDay      int64 `json:"is_new_day"`
+}
+
+func (s *Summary) IsCurrentlyNewDay() bool {
+	return s.IsNewDay == IsNewDayTrue
 }
 
 func (s *Summary) ConvertFromHGetAllToStruct(redisResponse []string) (err error) {
